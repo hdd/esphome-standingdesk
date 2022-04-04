@@ -1,0 +1,136 @@
+esphome:
+  name: standingdesk
+  platform: ESP8266
+  board: nodemcu
+  on_boot:
+    priority: -10
+    then:
+    - logger.log: Setting Min and Max Height at startup
+    - number.set: 
+        id : min_height
+        value: 0.681541
+  
+    - number.set: 
+        id : max_height
+        value: 0.965545
+            
+    
+    - rtttl.play: "success:d=24,o=5,b=100:c,g,b"
+
+
+# Enable logging
+logger:
+ level: DEBUG
+
+
+# Enable Home Assistant API
+api:
+  password: ""
+
+ota:
+  password: ""
+
+wifi:
+  ssid: <YOUR SSD>
+  password: <YOUR SSD PASS>
+
+  # Enable fallback hotspot (captive portal) in case wifi connection fails
+  ap:
+    ssid: "Standingdesk Fallback Hotspot"
+    password: "6zAyyCHFCvzr"
+
+captive_portal:
+
+button:
+  - platform: template
+    name: Set Max Height
+    icon: "mdi:arrow-collapse-up"
+
+    on_press:
+      then:
+        - logger.log: Button Pressed
+        - number.set: 
+            id: max_height
+            value: !lambda |- 
+                float cdist  = id(current_height).state;
+                ESP_LOGD("desk", "Setting max height to: %f" , cdist);
+                return cdist;
+
+  - platform: template
+    name: Set Min Height
+    icon: "mdi:arrow-collapse-down"
+
+    on_press:
+      then:
+        - logger.log: Button Pressed
+        - number.set: 
+            id: min_height
+            value: !lambda |- 
+                float cdist  = id(current_height).state;
+                ESP_LOGD("desk", "Setting min height to: %f" , cdist);
+                return cdist;
+
+output:
+  - platform: esp8266_pwm
+    pin: D2
+    id: rtttl_out
+
+rtttl:
+  output: rtttl_out
+  id: rtttl_buzzer
+
+  
+sensor:
+  - platform: ultrasonic
+    id: current_height
+    trigger_pin: D7
+    echo_pin: D6
+    name: "distance"
+    update_interval : 1s
+    accuracy_decimals: 3
+    filters:
+      - median:
+          window_size: 3
+          send_every: 3
+          send_first_at: 2
+      
+    on_value:
+      then:
+        - if:
+            condition:
+              or: 
+                - lambda: return id(current_height).state < id(min_height).state;
+                - lambda: return id(current_height).state > id(max_height).state;
+
+            then:
+              - logger.log: Outside range
+              - rtttl.play: "short:d=4,o=5,b=100:16e6,16e6"
+
+            else:
+             - logger.log: Inside range
+             - rtttl.stop
+
+
+
+number:
+  - platform: template
+    optimistic: true
+    mode: box
+    id: max_height
+    name: "Max Desk Height"
+    icon: "mdi:arrow-up"
+    unit_of_measurement: Mt
+    min_value: 0.5
+    max_value: 1.1
+    step: 0.1
+
+  - platform: template
+    optimistic: true
+    mode: box
+    id: min_height
+    name: "Min Desk Height"
+    icon: "mdi:arrow-down"
+    unit_of_measurement : Mt
+    min_value: 0.5
+    max_value: 1.1
+    step: 0.1
