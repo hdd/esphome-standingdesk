@@ -1,1 +1,1 @@
-# esphome-standingtable
+# esphome-standingdesk
